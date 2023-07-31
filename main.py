@@ -1,11 +1,25 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+import os
+from fastapi import FastAPI, Request, Form, status
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
 
-class Taco_Fast_Food(BaseModel):
-    nombre: str
-    plato_favorito: str
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+
+# from pydantic import BaseModel
+
+# class Taco_Fast_Food(BaseModel):
+#     nombre: str
+#     plato_favorito: str
 
 app = FastAPI(title='Taco FastFood')
+
+# templates = Jinja2Templates(directory="templates")
+# templates = Jinja2Templates(directory=os.path.abspath(os.path.expanduser('templates')))
+templates = Jinja2Templates(directory=str(Path(BASE_DIR, 'templates')))
+
 
 taco_clients = [
     {
@@ -20,47 +34,76 @@ taco_clients = [
     },
 ]
 
-@app.get('/taco-clients/')
-async def get():
-    return taco_clients
+@app.get('/taco-clients', response_class=HTMLResponse)
+async def get_clients(request: Request):
+    return templates.TemplateResponse(
+        "index.html", 
+        {"request": request,"taco_clients": taco_clients}
+    )
+ 
+#  Post urls
+@app.get('/form', response_class=HTMLResponse)
+async def get_form(request: Request):
+    return templates.TemplateResponse(
+        "post.html", 
+        {"request": request}
+    )
 
-@app.get('/taco-clients/{id}')
-async def get(id: int):
-    id_int = int(id)
-    for client in taco_clients:
-        if client['id'] == id_int:
-            return client
-    return {'Error': 'no encontrado'}
-
-@app.post('/taco-clients/')
-async def post_client(taco_client: Taco_Fast_Food):
-    # taco_client_dict = taco_client.dict()
-    taco_client_dict = taco_client.model_dump()
+# obs:pip install python-multipart 
+@app.post('/post-client')
+async def post_client(nombre: str = Form(...), plato_favorito: str = Form(...)):
     taco_client_dict = {
         'id': len(taco_clients) + 1,
-        'nombre': taco_client_dict['nombre'],
-        'plato_favorito': taco_client_dict['plato_favorito'],
-    }
+        'nombre': nombre,
+        'plato_favorito': plato_favorito,
+    } 
     
     taco_clients.append(taco_client_dict)
-    return taco_client_dict
+    return RedirectResponse(url=app.url_path_for("get_clients"), status_code=status.HTTP_303_SEE_OTHER)
 
-@app.put('/taco-clients/{id}')
-async def update_client(id: int, taco_client: Taco_Fast_Food):
+# update urls
+@app.get('/edit-client/{id}')
+async def get_by_id(id: int, request: Request):
     id_int = int(id)
+    client = get_client_by_id(id_int)
+    return templates.TemplateResponse(
+        "edit.html", 
+        {"request": request, 'client': client}
+    )
 
+def get_client_by_id(id):
+    client_id = {}
+    for client in taco_clients:
+       if client['id'] == id:
+            client_id = client
+    return client_id
+    
+@app.post('/update-client/{id}')
+async def update_client(id: int, nombre: str = Form(...), plato_favorito: str = Form(...)):
+    id_int = int(id)
     for client in taco_clients:
         if client['id'] == id_int:
-            client['nombre'] = taco_client.nombre
-            client['plato_favorito'] = taco_client.plato_favorito
-            return client
-    return {'Error': 'no encontrado'}
+            client['nombre'] = nombre
+            client['plato_favorito'] = plato_favorito
 
-@app.delete('/taco-clients/{id}')
+    return RedirectResponse(url=app.url_path_for("get_clients"), status_code=status.HTTP_303_SEE_OTHER)
+
+#  delete url
+@app.get('/delete-client/{id}')
 async def delete_client(id: int):
     id_int = int(id)
     for client in taco_clients:
         if client['id'] == id_int:
             taco_clients.remove(client)
-            return {'msg': 'cliente eliminado'}
-    return {'Error': 'no encontrado'}
+
+    return RedirectResponse(url=app.url_path_for("get_clients"), status_code=status.HTTP_303_SEE_OTHER)
+
+
+
+
+# Solução template
+'''
+raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: index.html
+'''
+#  https://www.appsloveworld.com/python/241/fastapi-jinja2-exceptions-templatenotfound-index-html
